@@ -1,5 +1,5 @@
 {
-    "name": "creationmediatools/cloudwatch-logger",
+    "name": "handybitesize/cloudwatch-logger",
     "description": "CloudWatch Logging Handler",
     "license": "MIT",
     "authors": [
@@ -10,8 +10,8 @@
         }
     ],
     "support": {
-        "issues": "https://gitlab.com/creationmedia/cloudwatch-logger/issues",
-        "source": "https://gitlab.com/creationmedia/cloudwatch-logger"
+        "issues": "https://github.com/handybitesize/cloudwatch-logger/issues",
+        "source": "https://github.com/handybitesize/cloudwatch-logger"
     },
     "require": {
         "php": ">=5.6.0"
