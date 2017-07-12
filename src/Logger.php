@@ -185,7 +185,7 @@ final class Logger
     static private function logFile($level, $message, $context)
     {
         //add date
-        $message = sprintf('[%s] %s', date('Y-m-d h:i:s'), $message);
+        $message = sprintf('[%s] %s', date('Y-m-d H:i:s'), $message);
         $line = sprintf("%s %s\n", $message, json_encode($context));
         file_put_contents(self::get('LOG_PATH'), $line, FILE_APPEND);
     }
