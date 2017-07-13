@@ -174,8 +174,14 @@ final class Logger
             ]
         )->get('logStreams');
         foreach($streams as $stream) {
-            if ($stream['logStreamName'] === self::get('LOG_STREAM') && isset($stream['uploadSequenceToken'])) {
-                return $stream['uploadSequenceToken'];
+            if ($stream['logStreamName'] === self::get('LOG_STREAM')) {
+                if (isset($stream['uploadSequenceToken'])) {
+                    return $stream['uploadSequenceToken'];
+                } else {
+                    //generate the first one
+                    return 0;
+                }
+
             }
         }
         return false;
@@ -185,7 +191,8 @@ final class Logger
     {
         self::initializeCloudWatch();
         $token = self::getSequenceToken();
-        if (!$token) {
+
+        if ($token === false) {
             self::setEmergencyFileLog(self::get('LOG_GROUP'), self::get('LOG_STREAM'));
             self::logFile($level, $message, $context);
             return;
@@ -197,9 +204,11 @@ final class Logger
                 [
                     'message'=>sprintf('%s %s',$message, json_encode($context)),
                     'timestamp' =>  time()*1000],
-            ],
-            'sequenceToken' => $token
+            ]
         ];
+        if ($token !== 0) {
+            $data[ 'sequenceToken'] = $token;
+        }
         try {
             $response = self::$client->putLogEvents($data);
         } catch(CloudWatchLogsException $e) {
