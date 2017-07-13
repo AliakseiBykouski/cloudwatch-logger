@@ -1,6 +1,7 @@
 <?php
 
 namespace CreationMedia\CloudWatchLogger;
+use Aws\CloudWatchLogs\Exception\CloudWatchLogsException;
 
 final class Logger
 {
@@ -188,7 +189,16 @@ final class Logger
             ],
             'sequenceToken' => self::getSequenceToken()
         ];
-        $response = self::$client->putLogEvents($data);
+        try {
+            $response = self::$client->putLogEvents($data);
+        } catch(CloudWatchLogsException $e) {
+            if ($e->getAwsErrorCode() == 'InvalidSequenceTokenException') {
+                $parts = explode(':', $e->getAwsErrorMessage());
+                $token = trim(array_pop($parts));
+                $data['sequenceToken'] = $token;
+                $response = self::$client->putLogEvents($data);
+            }
+        }
     }
 
     static private function logFile($level, $message, $context)
