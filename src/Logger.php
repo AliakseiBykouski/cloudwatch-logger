@@ -142,9 +142,6 @@ final class Logger
 
         $existingStreamsNames = array_map(
             function ($stream) {
-                if ($stream['logStreamName'] === self::get('LOG_STREAM') && isset($stream['uploadSequenceToken'])) {
-                    self::set('SEQUENCE_TOKEN', $stream['uploadSequenceToken']);
-                }
                 return $stream['logStreamName'];
             },
             $existingStreams
@@ -164,13 +161,18 @@ final class Logger
 
     static private function getSequenceToken()
     {
-        $existingStreams = self::$client->describeLogStreams(
+        $streams = self::$client->describeLogStreams(
             [
                 'logGroupName' => self::get('LOG_GROUP'),
                 'logStreamNamePrefix' => self::get('LOG_STREAM')
             ]
         )->get('logStreams');
-        sd($existingStreams);
+        foreach($streams as $stream) {
+            if ($stream['logStreamName'] === self::get('LOG_STREAM') && isset($stream['uploadSequenceToken'])) {
+                return $stream['uploadSequenceToken'];
+            }
+        }
+        return false;
     }
 
     static private function logCloudWatch($level, $message, $context)
@@ -183,14 +185,10 @@ final class Logger
                 [
                     'message'=>sprintf('%s %s',$message, json_encode($context)),
                     'timestamp' =>  time()*1000],
-            ]
+            ],
+            'sequenceToken' => self::getSequenceToken()
         ];
-        if (self::exists('SEQUENCE_TOKEN')) {
-            $data['sequenceToken'] = self::get('SEQUENCE_TOKEN');
-        }
         $response = self::$client->putLogEvents($data);
-
-        self::set('SEQUENCE_TOKEN',  $response->get('nextSequenceToken'));
     }
 
     static private function logFile($level, $message, $context)
