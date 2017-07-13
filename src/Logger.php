@@ -66,6 +66,11 @@ final class Logger
         }
     }
 
+    public static function setEmergencyFileLog($group, $stream)
+    {
+        self::set('LOG_PATH', sprintf('%s/%s-%s.log', sys_get_temp_dir(), $group, $stream));
+    }
+
     public function setLogLevel($level)
     {
         self::$level = intval($level);
@@ -179,6 +184,12 @@ final class Logger
     static private function logCloudWatch($level, $message, $context)
     {
         self::initializeCloudWatch();
+        $token = self::getSequenceToken();
+        if (!$token) {
+            self::setEmergencyFileLog(self::get('LOG_GROUP'), self::get('LOG_STREAM'));
+            self::logFile($level, $message, $context);
+            return;
+        }
         $data = [
             'logGroupName' => self::get('LOG_GROUP'),
             'logStreamName' => self::get('LOG_STREAM'),
@@ -187,7 +198,7 @@ final class Logger
                     'message'=>sprintf('%s %s',$message, json_encode($context)),
                     'timestamp' =>  time()*1000],
             ],
-            'sequenceToken' => self::getSequenceToken()
+            'sequenceToken' => $token
         ];
         try {
             $response = self::$client->putLogEvents($data);
