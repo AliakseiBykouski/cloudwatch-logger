@@ -162,6 +162,17 @@ final class Logger
 
     }
 
+    static private function getSequenceToken()
+    {
+        $existingStreams = self::$client->describeLogStreams(
+            [
+                'logGroupName' => self::get('LOG_GROUP'),
+                'logStreamNamePrefix' => self::get('LOG_STREAM')
+            ]
+        )->get('logStreams');
+        sd($existingStreams);
+    }
+
     static private function logCloudWatch($level, $message, $context)
     {
         self::initializeCloudWatch();
