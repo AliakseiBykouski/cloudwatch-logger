@@ -19,29 +19,53 @@ final class Logger
     private static $level = 200;
     private static $region = 'eu-west-1';
     private static $client;
+    private static $cloudEvents = [];
+    private static $batchSize = 100;
+    private static $dataLimit = 262144;
+    private static $currentData = 0;
 
-    private function __construct(){}
+    private function __construct()
+    {
+        register_shutdown_function([__CLASS__, 'close']);
+    }
 
     public static function getInstance()
     {
-        if (self::$instance==null) {
+        if (self::$instance == null) {
             self::$instance = new Logger();
         }
         return self::$instance;
     }
-    private function __clone(){ }
 
-    private function __wakeup() { }
-
-    static public function set($key,$obj) {
-        return self::$registry[$key]=$obj;
+    private function __clone()
+    {
     }
 
-    static public function get($key) {
+    private function __wakeup()
+    {
+    }
+
+    static public function close()
+    {
+        self::flush();
+    }
+
+    public function __destruct()
+    {
+    }
+
+    static public function set($key, $obj)
+    {
+        return self::$registry[$key] = $obj;
+    }
+
+    static public function get($key)
+    {
         return self::$registry[$key];
     }
 
-    static function exists($key) {
+    static function exists($key)
+    {
         return isset(self::$registry[$key]);
     }
 
@@ -58,11 +82,11 @@ final class Logger
     public function setLogName($name)
     {
         if (substr($name, 0, 7) == 'file://') {
-            self::set('LOG_PATH',substr($name, 7) );
-            self::set('LOG_HANDLER','logFile' );
+            self::set('LOG_PATH', substr($name, 7));
+            self::set('LOG_HANDLER', 'logFile');
         } else {
-            self::set('LOG_GROUP',$name );
-            self::set('LOG_HANDLER','logCloudWatch' );
+            self::set('LOG_GROUP', $name);
+            self::set('LOG_HANDLER', 'logCloudWatch');
         }
     }
 
@@ -161,7 +185,7 @@ final class Logger
                 ]
             );
         }
-        self::$client =  $client;
+        self::$client = $client;
 
     }
 
@@ -173,7 +197,7 @@ final class Logger
                 'logStreamNamePrefix' => self::get('LOG_STREAM')
             ]
         )->get('logStreams');
-        foreach($streams as $stream) {
+        foreach ($streams as $stream) {
             if ($stream['logStreamName'] === self::get('LOG_STREAM')) {
                 if (isset($stream['uploadSequenceToken'])) {
                     return $stream['uploadSequenceToken'];
@@ -187,38 +211,98 @@ final class Logger
         return false;
     }
 
+
+    static private function formatMessage($message, $context)
+    {
+
+        $log =  [
+            'message' => sprintf('%s %s', $message, json_encode($context)),
+            'timestamp' => time() * 1000
+        ];
+        if (self::getMessageSize($log) > self::$dataLimit) {
+            $message = substr($message, 0, 100). '[TRUCATED]';
+            $c = [];
+            $c['log_level'] = $context['log_level'];
+            $c['instance'] = $context['instance'];
+            unset($context['log_level']);
+            unset($context['instance']);
+            foreach (array_keys($context) as $a) {
+                $c[$a] = 'REMOVED';
+            }
+            $log =  [
+                'message' => sprintf('%s %s', $message, json_encode($c)),
+                'timestamp' => time() * 1000
+            ];
+        }
+        return $log;
+    }
+
+    static private function getMessageSize($log)
+    {
+        return strlen($log['message']) + 26;
+    }
+
     static private function logCloudWatch($level, $message, $context)
     {
+        $log = self::formatMessage($message, $context);
+        if ((self::$currentData + self::getMessageSize($log) >= self::$dataLimit)) {
+            //flush
+            self::flush(1);
+        }
+        if ((count(self::$cloudEvents) >= self::$batchSize)) {
+            //flush
+            self::flush(2);
+        }
+        self::$currentData += self::getMessageSize($log);
+        self::$cloudEvents[] = $log;
+
+    }
+
+    static private function flush($why = 0)
+    {
+
+        if (!count(self::$cloudEvents)) {
+            return;
+        }
+        //for debugging
+        switch($why) {
+            case 0:
+                //Called by shutdown handler
+                break;
+            case 1:
+                //Called because self::$dataLimit reached
+                break;
+            case 2:
+                //Called because self::$batchSize reached
+                break;
+        }
         self::initializeCloudWatch();
         $token = self::getSequenceToken();
 
-        if ($token === false) {
-            self::setEmergencyFileLog(self::get('LOG_GROUP'), self::get('LOG_STREAM'));
-            self::logFile($level, $message, $context);
-            return;
-        }
         $data = [
             'logGroupName' => self::get('LOG_GROUP'),
             'logStreamName' => self::get('LOG_STREAM'),
-            'logEvents' => [
-                [
-                    'message'=>sprintf('%s %s',$message, json_encode($context)),
-                    'timestamp' =>  time()*1000],
-            ]
+            'logEvents' => self::$cloudEvents
         ];
         if ($token !== 0) {
-            $data[ 'sequenceToken'] = $token;
+            $data['sequenceToken'] = $token;
         }
         try {
             $response = self::$client->putLogEvents($data);
-        } catch(CloudWatchLogsException $e) {
+            self::$cloudEvents = [];
+        } catch (CloudWatchLogsException $e) {
             if ($e->getAwsErrorCode() == 'InvalidSequenceTokenException') {
                 $parts = explode(':', $e->getAwsErrorMessage());
                 $token = trim(array_pop($parts));
                 $data['sequenceToken'] = $token;
                 $response = self::$client->putLogEvents($data);
+                self::$cloudEvents = [];
+            } else {
+                //todo handle other errors
+                // die($e->getMessage());
             }
         }
+
     }
 
     static private function logFile($level, $message, $context)
@@ -235,7 +319,7 @@ final class Logger
             return;
         }
         //cast context to an array
-        $context = (array) $context;
+        $context = (array)$context;
 
         $context['log_level'] = self::getLevelName($level);
         $context['instance'] = self::getInstanceId();
@@ -251,6 +335,7 @@ final class Logger
         }
         call_user_func_array(['self', self::get('LOG_HANDLER')], [$level, $message, $context]);
     }
+
     public static function debug($msg, $context = [])
     {
         self::doLog(self::DEBUG, $msg, $context);
