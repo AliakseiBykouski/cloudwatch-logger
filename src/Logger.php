@@ -146,44 +146,47 @@ final class Logger
         ];
 
         $client = new \Aws\CloudWatchLogs\CloudWatchLogsClient($sdkParams);
-        $existingGroups = $client->DescribeLogGroups(['logGroupNamePrefix' => self::get('LOG_GROUP')])->get('logGroups');
-        $existingGroupsNames = array_map(
-            function ($group) {
-                return $group['logGroupName'];
-            },
-            $existingGroups
-        );
-        // create group and set retention policy if not created yet
-        if (!in_array(self::get('LOG_GROUP'), $existingGroupsNames, true)) {
-            $client->createLogGroup(['logGroupName' => self::get('LOG_GROUP')]);
-            $client->putRetentionPolicy(
+        if (self::get('SKIP_CREATE') !== true) {
+
+            $existingGroups = $client->DescribeLogGroups(['logGroupNamePrefix' => self::get('LOG_GROUP')])->get('logGroups');
+            $existingGroupsNames = array_map(
+                function ($group) {
+                    return $group['logGroupName'];
+                },
+                $existingGroups
+            );
+            // create group and set retention policy if not created yet
+            if (!in_array(self::get('LOG_GROUP'), $existingGroupsNames, true)) {
+                $client->createLogGroup(['logGroupName' => self::get('LOG_GROUP')]);
+                $client->putRetentionPolicy(
+                    [
+                        'logGroupName' => self::get('LOG_GROUP'),
+                        'retentionInDays' => 90,
+                    ]
+                );
+            }
+            $existingStreams = $client->describeLogStreams(
                 [
                     'logGroupName' => self::get('LOG_GROUP'),
-                    'retentionInDays' => 90,
+                    'logStreamNamePrefix' => self::get('LOG_STREAM')
                 ]
-            );
-        }
-        $existingStreams = $client->describeLogStreams(
-            [
-                'logGroupName' => self::get('LOG_GROUP'),
-                'logStreamNamePrefix' => self::get('LOG_STREAM')
-            ]
-        )->get('logStreams');
+            )->get('logStreams');
 
-        $existingStreamsNames = array_map(
-            function ($stream) {
-                return $stream['logStreamName'];
-            },
-            $existingStreams
-        );
-
-        if (!in_array(self::get('LOG_STREAM'), $existingStreamsNames, true)) {
-            $client->createLogStream(
-                [
-                    'logGroupName' => self::get('LOG_GROUP'),
-                    'logStreamName' => self::get('LOG_STREAM')
-                ]
+            $existingStreamsNames = array_map(
+                function ($stream) {
+                    return $stream['logStreamName'];
+                },
+                $existingStreams
             );
+
+            if (!in_array(self::get('LOG_STREAM'), $existingStreamsNames, true)) {
+                $client->createLogStream(
+                    [
+                        'logGroupName' => self::get('LOG_GROUP'),
+                        'logStreamName' => self::get('LOG_STREAM')
+                    ]
+                );
+            }
         }
         self::$client = $client;
 
