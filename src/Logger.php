@@ -214,7 +214,7 @@ final class Logger
                 }
             }
         } catch (CloudWatchLogsException $e) {
-            return false;
+            return 0;
         }
         return false;
     }
