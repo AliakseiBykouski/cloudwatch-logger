@@ -10,6 +10,7 @@ $logger->setLogLevel($logger::INFO); //Defaults to INFO
 
 $logger::set('STRIP_NAMESPACE', 'Creation\\'); //optionally strip common namespaces
 $logger::set('AWS_CREDENTIALS', self::get_aws_creds()); //Guzzle Promise format
+$logger::set('SKIP_CREATE', true); //defaults false, skip the creation of streams.
 
 $logger::set('LOG_STREAM', self::get('ENVIRONMENT')); //LOG_STREAM required for CW
 

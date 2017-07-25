@@ -194,22 +194,27 @@ final class Logger
 
     static private function getSequenceToken()
     {
-        $streams = self::$client->describeLogStreams(
-            [
-                'logGroupName' => self::get('LOG_GROUP'),
-                'logStreamNamePrefix' => self::get('LOG_STREAM')
-            ]
-        )->get('logStreams');
-        foreach ($streams as $stream) {
-            if ($stream['logStreamName'] === self::get('LOG_STREAM')) {
-                if (isset($stream['uploadSequenceToken'])) {
-                    return $stream['uploadSequenceToken'];
-                } else {
-                    //generate the first one
-                    return 0;
-                }
+        try {
+            $streams = self::$client->describeLogStreams(
+                [
+                    'logGroupName' => self::get('LOG_GROUP'),
+                    'logStreamNamePrefix' => self::get('LOG_STREAM')
+                ]
+            )->get('logStreams');
 
+            foreach ($streams as $stream) {
+                if ($stream['logStreamName'] === self::get('LOG_STREAM')) {
+                    if (isset($stream['uploadSequenceToken'])) {
+                        return $stream['uploadSequenceToken'];
+                    } else {
+                        //generate the first one
+                        return 0;
+                    }
+
+                }
             }
+        } catch (CloudWatchLogsException $e) {
+            return false;
         }
         return false;
     }
