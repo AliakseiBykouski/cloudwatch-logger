@@ -305,6 +305,10 @@ final class Logger
                 $data['sequenceToken'] = $token;
                 $response = self::$client->putLogEvents($data);
                 self::$cloudEvents = [];
+            } elseif ($e->getAwsErrorCode() == 'ThrottlingException') {
+                self::setEmergencyFileLog( self::get('LOG_GROUP'),  self::get('LOG_STREAM'));
+                self::set('LOG_HANDLER', 'logFile');
+                self::doLog(self::INFO, 'Dumping to file', self::$cloudEvents);
             } else {
                 //todo handle other errors
                 // die($e->getMessage());
