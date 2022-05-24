@@ -216,7 +216,7 @@ final class Logger
         } catch (CloudWatchLogsException $e) {
             return 0;
         }
-        return false;
+        return 0;
     }
 
 
@@ -293,7 +293,7 @@ final class Logger
             'logEvents' => self::$cloudEvents
         ];
         if ($token !== 0) {
-            $data['sequenceToken'] = $token;
+            $data['sequenceToken'] = (string) $token;
         }
         try {
             $response = self::$client->putLogEvents($data);
@@ -303,8 +303,17 @@ final class Logger
                 $parts = explode(':', $e->getAwsErrorMessage());
                 $token = trim(array_pop($parts));
                 $data['sequenceToken'] = $token;
-                $response = self::$client->putLogEvents($data);
-                self::$cloudEvents = [];
+                try {
+                    $response = self::$client->putLogEvents($data);
+                    self::$cloudEvents = [];
+                }
+                catch (\Exception $e) {
+                    $handler = self::get('LOG_HANDLER');
+                    self::setEmergencyFileLog( self::get('LOG_GROUP'),  self::get('LOG_STREAM'));
+                    self::set('LOG_HANDLER', 'logFile');
+                    self::doLog(self::ERROR, $e->getMessage(), self::$cloudEvents);
+                    self::set('LOG_HANDLER', $handler);
+                }
             } elseif ($e->getAwsErrorCode() == 'ThrottlingException') {
                 self::setEmergencyFileLog( self::get('LOG_GROUP'),  self::get('LOG_STREAM'));
                 self::set('LOG_HANDLER', 'logFile');
